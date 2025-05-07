@@ -18,7 +18,14 @@ type Entry struct {
 	Timestamp time.Time
 }
 
+type PageData struct {
+	Entries    []Entry
+	Mode       string
+	BadgeClass string
+}
+
 var db *sql.DB
+var templates *template.Template
 
 func requireEnv(key string) string {
 	value := os.Getenv(key)
@@ -67,61 +74,118 @@ func initDB() {
 	}
 }
 
+func handleInsecure(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		text := r.FormValue("text")
+		if text != "" {
+			// WARNING: This code is deliberately vulnerable to SQL injection!
+			query := fmt.Sprintf("INSERT INTO entries (text) VALUES ('%s')", text)
+			_, err := db.Exec(query)
+			if err != nil {
+				log.Printf("Error inserting entry: %v", err)
+				http.Error(w, "Error saving entry", http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+
+	// Fetch entries from database
+	rows, err := db.Query("SELECT id, text, timestamp FROM entries ORDER BY timestamp DESC")
+	if err != nil {
+		log.Printf("Error querying entries: %v", err)
+		http.Error(w, "Error fetching entries", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var entries []Entry
+	for rows.Next() {
+		var entry Entry
+		err := rows.Scan(&entry.ID, &entry.Text, &entry.Timestamp)
+		if err != nil {
+			log.Printf("Error scanning entry: %v", err)
+			continue
+		}
+		entries = append(entries, entry)
+	}
+
+	data := PageData{
+		Entries:    entries,
+		Mode:       "Insecure",
+		BadgeClass: "insecure",
+	}
+
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+func handleSecure(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		text := r.FormValue("text")
+		if text != "" {
+			// Use parameterized query for security
+			_, err := db.Exec("INSERT INTO entries (text) VALUES ($1)", text)
+			if err != nil {
+				log.Printf("Error inserting entry: %v", err)
+				http.Error(w, "Error saving entry", http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+
+	// Fetch entries using parameterized query
+	rows, err := db.Query("SELECT id, text, timestamp FROM entries ORDER BY timestamp DESC")
+	if err != nil {
+		log.Printf("Error querying entries: %v", err)
+		http.Error(w, "Error fetching entries", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var entries []Entry
+	for rows.Next() {
+		var entry Entry
+		err := rows.Scan(&entry.ID, &entry.Text, &entry.Timestamp)
+		if err != nil {
+			log.Printf("Error scanning entry: %v", err)
+			continue
+		}
+		entries = append(entries, entry)
+	}
+
+	data := PageData{
+		Entries:    entries,
+		Mode:       "Secure",
+		BadgeClass: "secure",
+	}
+
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
 func main() {
 	initDB()
 	defer db.Close()
 
-	tmpl := template.Must(template.ParseFiles("index.html"))
+	// Parse template
+	templates = template.Must(template.ParseFiles("base.html"))
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			text := r.FormValue("text")
-			if text != "" {
-				// WARNING: This code is deliberately vulnerable to SQL injection!
-				// DO NOT USE THIS IN PRODUCTION!
-				//
-				// The secure way to handle this is to use parameterized queries with db.Exec
-				// and placeholders ($1, $2, etc) like this:
-				//     db.Exec("INSERT INTO entries (text) VALUES ($1)", text)
-				//
-				// Direct string interpolation of user input into SQL queries is extremely dangerous
-				// as it allows attackers to inject malicious SQL commands.
-				// Example attack input: '), ('pwned'), ('pwned
+	// Create separate mux for each server
+	insecureMux := http.NewServeMux()
+	secureMux := http.NewServeMux()
 
-				query := fmt.Sprintf("INSERT INTO entries (text) VALUES ('%s')", text)
-				_, err := db.Exec(query)
-				if err != nil {
-					log.Printf("Error inserting entry: %v", err)
-					http.Error(w, "Error saving entry", http.StatusInternalServerError)
-					return
-				}
-			}
-		}
+	// Set up routes
+	insecureMux.HandleFunc("/", handleInsecure)
+	secureMux.HandleFunc("/", handleSecure)
 
-		// Fetch entries from database
-		rows, err := db.Query("SELECT id, text, timestamp FROM entries ORDER BY timestamp DESC")
-		if err != nil {
-			log.Printf("Error querying entries: %v", err)
-			http.Error(w, "Error fetching entries", http.StatusInternalServerError)
-			return
-		}
-		defer rows.Close()
+	// Get ports from environment
+	insecurePort := requireEnv("INSECURE_PORT")
+	securePort := requireEnv("SECURE_PORT")
 
-		var entries []Entry
-		for rows.Next() {
-			var entry Entry
-			err := rows.Scan(&entry.ID, &entry.Text, &entry.Timestamp)
-			if err != nil {
-				log.Printf("Error scanning entry: %v", err)
-				continue
-			}
-			entries = append(entries, entry)
-		}
+	// Start servers
+	go func() {
+		log.Printf("Insecure server starting at http://localhost:%s", insecurePort)
+		log.Fatal(http.ListenAndServe(":"+insecurePort, insecureMux))
+	}()
 
-		tmpl.Execute(w, entries)
-	})
-
-	port := requireEnv("PORT")
-	log.Printf("Server starting at http://localhost:%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Printf("Secure server starting at http://localhost:%s", securePort)
+	log.Fatal(http.ListenAndServe(":"+securePort, secureMux))
 }

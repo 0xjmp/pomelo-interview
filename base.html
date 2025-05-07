@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Pomelo Notes</title>
+    <title>Pomelo Notes - {{.Mode}}</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -38,16 +38,45 @@
         button:hover {
             background-color: #45a049;
         }
+        .nav {
+            margin-bottom: 20px;
+        }
+        .nav a {
+            color: #4CAF50;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+        .nav a:hover {
+            text-decoration: underline;
+        }
+        .mode-badge {
+            padding: 5px 10px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-left: 10px;
+            font-size: 0.8em;
+            color: white;
+        }
+        .mode-badge.secure {
+            background-color: #4CAF50;
+        }
+        .mode-badge.insecure {
+            background-color: #ff4444;
+        }
     </style>
 </head>
 <body>
-    <h1>Pomelo Notes</h1>
+    <div class="nav">
+        <a href="http://localhost:8080/">Insecure Version</a>
+        <a href="http://localhost:8081/">Secure Version</a>
+    </div>
+    <h1>Pomelo Notes <span class="mode-badge {{.BadgeClass}}">{{.Mode}} Mode</span></h1>
     <form method="POST">
         <input type="text" name="text" placeholder="Enter your note" required>
         <button type="submit">Add Note</button>
     </form>
 
-    {{range .}}
+    {{range .Entries}}
     <div class="entry">
         <p>{{.Text}}</p>
         <div class="timestamp">{{.Timestamp.Format "January 2, 2006 at 3:04 PM"}}</div>

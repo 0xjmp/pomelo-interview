@@ -1,161 +1,109 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" class="h-full bg-[#F8F7F4]">
 <head>
     <title>Pomelo Notes - {{.Mode}}</title>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{.CSRFToken}}">
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@radix-ui/themes@2.0.0/styles.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'pomelo-orange': '#FF7F57',
+                        'pomelo-orange-dark': '#E5724E',
+                        'pomelo-cream': '#F8F7F4',
+                        'pomelo-navy': '#1F3B4D',
+                    }
+                }
+            }
         }
-        .entry {
-            border: 1px solid #ddd;
-            margin: 10px 0;
-            padding: 15px;
-            border-radius: 5px;
-        }
-        .entry.jwt-verified {
-            background-color: #ffebee;
-        }
-        .entry p {
-            margin: 0;
-            word-break: break-all;
-        }
-        .jwt-message {
-            color: #d32f2f;
-            font-weight: bold;
-            font-size: 1.2em;
-            text-align: left;
-        }
-        .timestamp {
-            color: #666;
-            font-size: 0.8em;
-            margin-top: 8px;
-        }
-        form {
-            margin-bottom: 20px;
-        }
-        input[type="text"] {
-            width: 80%;
-            padding: 8px;
-            margin-right: 10px;
-            font-family: monospace;
-        }
-        button {
-            padding: 8px 15px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        .nav {
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .nav-links {
-            display: flex;
-            gap: 15px;
-        }
-        .nav a {
-            color: #4CAF50;
-            text-decoration: none;
-        }
-        .nav a:hover {
-            text-decoration: underline;
-        }
-        .mode-badge {
-            padding: 5px 10px;
-            border-radius: 4px;
-            display: inline-block;
-            margin-left: 10px;
-            font-size: 0.8em;
-            color: white;
-        }
-        .mode-badge.secure {
-            background-color: #4CAF50;
-        }
-        .mode-badge.insecure {
-            background-color: #ff4444;
-        }
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .user-info img {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-        }
-        .auth-buttons {
-            display: flex;
-            gap: 10px;
-        }
-        .auth-buttons a {
-            padding: 8px 15px;
-            border-radius: 4px;
-            text-decoration: none;
-            color: white;
-        }
-        .login-btn {
-            background-color: #4285f4;
-        }
-        .logout-btn {
-            background-color: #757575;
-        }
-    </style>
+    </script>
 </head>
-<body>
-    <div class="nav">
-        <div class="nav-links">
-            <a href="http://localhost:8080/">Insecure Version</a>
-            <a href="http://localhost:8081/">Secure Version</a>
-        </div>
-        {{if eq .Mode "Secure"}}
-            <div class="auth-buttons">
-                {{if .User}}
-                    <div class="user-info">
-                        {{if .User.Picture}}
-                            <img src="{{.User.Picture}}" alt="Profile picture">
-                        {{end}}
-                        <span>{{.User.Name}}</span>
-                        <a href="/logout" class="logout-btn">Logout</a>
+<body class="h-full bg-pomelo-cream">
+    <div class="min-h-full">
+        <nav class="border-b border-gray-200 bg-white">
+            <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+                <div class="flex h-16 justify-between">
+                    <div class="flex">
+                        <div class="flex flex-shrink-0 items-center space-x-4">
+                            <a href="http://localhost:8080/" class="text-pomelo-navy hover:text-pomelo-orange px-3 py-2 text-sm font-medium rounded-md hover:bg-pomelo-cream">Insecure Version</a>
+                            <a href="http://localhost:8081/" class="text-pomelo-navy hover:text-pomelo-orange px-3 py-2 text-sm font-medium rounded-md hover:bg-pomelo-cream">Secure Version</a>
+                        </div>
                     </div>
-                {{else}}
-                    <a href="/login" class="login-btn">Sign in with Google</a>
+                    {{if eq .Mode "Secure"}}
+                    <div class="flex items-center">
+                        {{if .User}}
+                            <div class="flex items-center space-x-3">
+                                {{if .User.Picture}}
+                                    <img class="h-8 w-8 rounded-full" src="{{.User.Picture}}" alt="Profile picture">
+                                {{end}}
+                                <span class="text-sm font-medium text-pomelo-navy">{{.User.Name}}</span>
+                                <a href="/logout" class="inline-flex items-center rounded-md bg-pomelo-navy px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pomelo-navy">Logout</a>
+                            </div>
+                        {{else}}
+                            <a href="/login" class="flex items-center justify-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                                <svg class="h-5 w-5" viewBox="0 0 24 24">
+                                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                                </svg>
+                                Sign in with Google
+                            </a>
+                        {{end}}
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+        </nav>
+
+        <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10">
+            <div class="flex items-center justify-between">
+                <h1 class="text-2xl font-bold leading-7 text-pomelo-navy sm:truncate sm:text-3xl sm:tracking-tight">
+                    Pomelo Notes
+                </h1>
+                <span class="inline-flex items-center rounded-md {{if eq .Mode "Secure"}}bg-green-50 text-green-700 ring-green-600/20{{else}}bg-red-50 text-red-700 ring-red-600/20{{end}} px-2 py-1 text-xs font-medium ring-1 ring-inset">
+                    {{.Mode}} Mode
+                </span>
+            </div>
+
+            <form method="POST" class="mt-8 space-y-4">
+                {{if eq .Mode "Secure"}}
+                    <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+                {{end}}
+                <div class="flex gap-x-4">
+                    <input 
+                        type="text" 
+                        name="text" 
+                        placeholder="{{if eq .Mode "Secure"}}Enter your note or paste a JWT token{{else}}Enter your note{{end}}"
+                        required
+                        class="block w-full rounded-md border-0 py-1.5 text-pomelo-navy shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-pomelo-orange sm:text-sm sm:leading-6 px-3"
+                    >
+                    <button 
+                        type="submit"
+                        class="rounded-md bg-pomelo-orange px-8 py-2 text-sm font-semibold text-white shadow-sm hover:bg-pomelo-orange-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pomelo-orange min-w-[140px] whitespace-nowrap"
+                    >
+                        Add Note
+                    </button>
+                </div>
+            </form>
+
+            <div class="mt-8 space-y-4">
+                {{range .Entries}}
+                <div class="rounded-lg {{if .IsJWT}}bg-pomelo-orange/10 border border-pomelo-orange/20{{else}}bg-white border border-gray-200{{end}} p-4 shadow-sm">
+                    {{if .IsJWT}}
+                    <div class="text-pomelo-orange font-semibold text-lg">Hello Puneet!</div>
+                    {{else}}
+                    <p class="text-pomelo-navy break-words">{{.Text}}</p>
+                    {{end}}
+                    <div class="mt-2 text-sm text-gray-500">{{.Timestamp.Format "January 2, 2006 at 3:04 PM"}}</div>
+                </div>
                 {{end}}
             </div>
-        {{end}}
+        </div>
     </div>
-    <h1>Pomelo Notes <span class="mode-badge {{.BadgeClass}}">{{.Mode}} Mode</span></h1>
-    <form method="POST">
-        {{if eq .Mode "Secure"}}
-            <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
-            <input type="text" name="text" placeholder="Enter your note or paste a JWT token" required>
-        {{else}}
-            <input type="text" name="text" placeholder="Enter your note" required>
-        {{end}}
-        <button type="submit">Add Note</button>
-    </form>
-
-    {{range .Entries}}
-    <div class="entry {{if .IsJWT}}jwt-verified{{end}}">
-        {{if .IsJWT}}
-        <div class="jwt-message">Hello Puneet!</div>
-        {{else}}
-        <p>{{.Text}}</p>
-        {{end}}
-        <div class="timestamp">{{.Timestamp.Format "January 2, 2006 at 3:04 PM"}}</div>
-    </div>
-    {{end}}
 </body>
 </html> 

@@ -156,6 +156,25 @@ db.Exec("INSERT INTO entries (text) VALUES ($1)", userInput)
 
 Uses modsecurity CRS ruleset v4.14.0 (latest).
 
+### JWT Verification
+
+You will only see a red background indicating a valid signature if the submitted JWT was signed by Puneet's private key. This asymmetric signature verification ensures that the JWT metadata is truly from him.
+
+The key in `puneet.pub` is actually in PKIX format (ASN.1 DER encoded) and uses the `secp256k1` curve. We can prove this using OpenSSL's ASN.1 parser which shows both the encoding format and the curve identifier:
+```bash
+$ openssl asn1parse -in puneet.pub -dump | cat
+ 0:d=0  hl=2 l=  86 cons: SEQUENCE          
+ 2:d=1  hl=2 l=  16 cons: SEQUENCE          
+ 4:d=2  hl=2 l=   7 prim: OBJECT            :id-ecPublicKey
+13:d=2  hl=2 l=   5 prim: OBJECT            :secp256k1
+20:d=1  hl=2 l=  66 prim: BIT STRING        
+   0000 - 00 04 31 4d 49 15 51 0e-f4 59 15 af 4a f4 e3 51   ..1MI.Q..Y..J..Q
+   0010 - a9 01 6c ca bd 08 b5 4c-16 26 6a b2 63 df e6 8d   ..l....L.&j.c...
+   0020 - 78 2d 9a 2b d1 93 ec 77-2d d4 e2 46 59 01 9b 52   x-.+...w-..FY..R
+   0030 - 43 56 4d e5 2b f9 48 b4-f4 f8 c1 8a df 80 31 8b   CVM.+.H.......1.
+   0040 - 87 80  
+```
+
 ## License
 
 MIT

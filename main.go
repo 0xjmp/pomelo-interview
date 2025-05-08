@@ -1,16 +1,24 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"crypto/x509/pkix"
 	"database/sql"
+	"encoding/asn1"
 	"encoding/gob"
+	"encoding/pem"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/0xjmp/pomelo-interview/auth"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/sessions"
 	_ "github.com/lib/pq"
@@ -21,6 +29,7 @@ type Entry struct {
 	ID        int
 	Text      string
 	Timestamp time.Time
+	IsJWT     bool
 }
 
 type PageData struct {
@@ -37,7 +46,22 @@ var (
 	store      *sessions.CookieStore
 	oauth      *oauth2.Config
 	googleAuth *auth.GoogleAuth
+	jwtPubKey  *ecdsa.PublicKey
 )
+
+var oidPublicKeyECDSA = asn1.ObjectIdentifier{1, 2, 840, 10045, 2, 1}
+var oidNamedCurveSecp256k1 = asn1.ObjectIdentifier{1, 3, 132, 0, 10}
+
+type publicKeyInfo struct {
+	Raw       asn1.RawContent
+	Algorithm pkix.AlgorithmIdentifier
+	PublicKey asn1.BitString
+}
+
+type ecdsaPublicKey struct {
+	Algorithm pkix.AlgorithmIdentifier
+	PublicKey asn1.BitString
+}
 
 func requireEnv(key string) string {
 	value := os.Getenv(key)
@@ -73,16 +97,34 @@ func initDB() {
 
 	log.Printf("Successfully connected to PostgreSQL at %s:%s", host, port)
 
-	// Create table if it doesn't exist
+	// Create table if it doesn't exist with is_jwt column
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS entries (
 			id SERIAL PRIMARY KEY,
 			text TEXT NOT NULL,
-			timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+			timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			is_jwt BOOLEAN NOT NULL DEFAULT FALSE
 		)
 	`)
 	if err != nil {
 		log.Fatal("Failed to create entries table:", err)
+	}
+
+	// Add is_jwt column if it doesn't exist
+	_, err = db.Exec(`
+		DO $$ 
+		BEGIN 
+			IF NOT EXISTS (
+				SELECT 1 
+				FROM information_schema.columns 
+				WHERE table_name='entries' AND column_name='is_jwt'
+			) THEN 
+				ALTER TABLE entries ADD COLUMN is_jwt BOOLEAN NOT NULL DEFAULT FALSE;
+			END IF;
+		END $$;
+	`)
+	if err != nil {
+		log.Fatal("Failed to add is_jwt column:", err)
 	}
 }
 
@@ -102,6 +144,53 @@ func initAuth() {
 
 	// Initialize OAuth config for backward compatibility
 	oauth = googleAuth.GetConfig()
+}
+
+func initJWT() {
+	// Read the public key file
+	pubKeyBytes, err := ioutil.ReadFile("puneet.pub")
+	if err != nil {
+		log.Fatal("Failed to read public key file:", err)
+	}
+
+	// Parse the PEM block
+	block, _ := pem.Decode(pubKeyBytes)
+	if block == nil {
+		log.Fatal("Failed to parse PEM block")
+	}
+
+	// Parse the ASN.1 structure
+	var pki publicKeyInfo
+	if _, err := asn1.Unmarshal(block.Bytes, &pki); err != nil {
+		log.Fatal("Failed to parse ASN.1 structure:", err)
+	}
+
+	// Verify it's an ECDSA key with secp256k1 curve
+	if !pki.Algorithm.Algorithm.Equal(oidPublicKeyECDSA) {
+		log.Fatal("Not an ECDSA public key")
+	}
+
+	var curve asn1.ObjectIdentifier
+	if _, err := asn1.Unmarshal(pki.Algorithm.Parameters.FullBytes, &curve); err != nil {
+		log.Fatal("Failed to parse curve identifier:", err)
+	}
+
+	if !curve.Equal(oidNamedCurveSecp256k1) {
+		log.Fatal("Not a secp256k1 curve")
+	}
+
+	// Parse the public key using secp256k1
+	pubKey, err := secp256k1.ParsePubKey(pki.PublicKey.Bytes)
+	if err != nil {
+		log.Fatal("Failed to parse secp256k1 public key:", err)
+	}
+
+	// Convert to standard ECDSA public key while preserving the secp256k1 curve
+	jwtPubKey = &ecdsa.PublicKey{
+		Curve: secp256k1.S256(),
+		X:     pubKey.X(),
+		Y:     pubKey.Y(),
+	}
 }
 
 func getUser(r *http.Request) *auth.GoogleUser {
@@ -129,8 +218,8 @@ func handleInsecure(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Fetch entries from database
-	rows, err := db.Query("SELECT id, text, timestamp FROM entries ORDER BY timestamp DESC")
+	// Fetch entries from database, excluding JWT entries
+	rows, err := db.Query("SELECT id, text, timestamp, is_jwt FROM entries WHERE is_jwt = false ORDER BY timestamp DESC")
 	if err != nil {
 		log.Printf("Error querying entries: %v", err)
 		http.Error(w, "Error fetching entries", http.StatusInternalServerError)
@@ -141,7 +230,7 @@ func handleInsecure(w http.ResponseWriter, r *http.Request) {
 	var entries []Entry
 	for rows.Next() {
 		var entry Entry
-		err := rows.Scan(&entry.ID, &entry.Text, &entry.Timestamp)
+		err := rows.Scan(&entry.ID, &entry.Text, &entry.Timestamp, &entry.IsJWT)
 		if err != nil {
 			log.Printf("Error scanning entry: %v", err)
 			continue
@@ -166,8 +255,27 @@ func handleSecure(w http.ResponseWriter, r *http.Request) {
 		// CSRF token is automatically verified by the middleware
 		text := r.FormValue("text")
 		if text != "" {
+			isJWT := false
+			// Check if the text looks like a JWT token
+			if isJWTFormat(text) {
+				// Try to verify the JWT
+				token, err := jwt.Parse(text, func(token *jwt.Token) (interface{}, error) {
+					// Check if the signing method matches our key
+					if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+						return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+					}
+					return jwtPubKey, nil
+				})
+
+				if err != nil {
+					log.Printf("JWT verification failed: %v", err)
+				} else if token.Valid {
+					isJWT = true
+				}
+			}
+
 			// Use parameterized query for security
-			_, err := db.Exec("INSERT INTO entries (text) VALUES ($1)", text)
+			_, err := db.Exec("INSERT INTO entries (text, is_jwt) VALUES ($1, $2)", text, isJWT)
 			if err != nil {
 				log.Printf("Error inserting entry: %v", err)
 				http.Error(w, "Error saving entry", http.StatusInternalServerError)
@@ -177,7 +285,7 @@ func handleSecure(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch entries using parameterized query
-	rows, err := db.Query("SELECT id, text, timestamp FROM entries ORDER BY timestamp DESC")
+	rows, err := db.Query("SELECT id, text, timestamp, is_jwt FROM entries ORDER BY timestamp DESC")
 	if err != nil {
 		log.Printf("Error querying entries: %v", err)
 		http.Error(w, "Error fetching entries", http.StatusInternalServerError)
@@ -188,7 +296,7 @@ func handleSecure(w http.ResponseWriter, r *http.Request) {
 	var entries []Entry
 	for rows.Next() {
 		var entry Entry
-		err := rows.Scan(&entry.ID, &entry.Text, &entry.Timestamp)
+		err := rows.Scan(&entry.ID, &entry.Text, &entry.Timestamp, &entry.IsJWT)
 		if err != nil {
 			log.Printf("Error scanning entry: %v", err)
 			continue
@@ -205,6 +313,11 @@ func handleSecure(w http.ResponseWriter, r *http.Request) {
 	}
 
 	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+// isJWTFormat checks if the text looks like a JWT token
+func isJWTFormat(text string) bool {
+	return len(text) > 0 && text[0] == 'e' && len(strings.Split(text, ".")) == 3
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -277,6 +390,7 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 func main() {
 	initDB()
 	initAuth()
+	initJWT()
 	defer db.Close()
 
 	// Parse template

@@ -2,6 +2,8 @@
 <html>
 <head>
     <title>Pomelo Notes - {{.Mode}}</title>
+    <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{.CSRFToken}}">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -15,9 +17,23 @@
             padding: 15px;
             border-radius: 5px;
         }
+        .entry.jwt-verified {
+            background-color: #ffebee;
+        }
+        .entry p {
+            margin: 0;
+            word-break: break-all;
+        }
+        .jwt-message {
+            color: #d32f2f;
+            font-weight: bold;
+            font-size: 1.2em;
+            text-align: left;
+        }
         .timestamp {
             color: #666;
             font-size: 0.8em;
+            margin-top: 8px;
         }
         form {
             margin-bottom: 20px;
@@ -26,6 +42,7 @@
             width: 80%;
             padding: 8px;
             margin-right: 10px;
+            font-family: monospace;
         }
         button {
             padding: 8px 15px;
@@ -123,14 +140,20 @@
     <form method="POST">
         {{if eq .Mode "Secure"}}
             <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+            <input type="text" name="text" placeholder="Enter your note or paste a JWT token" required>
+        {{else}}
+            <input type="text" name="text" placeholder="Enter your note" required>
         {{end}}
-        <input type="text" name="text" placeholder="Enter your note" required>
         <button type="submit">Add Note</button>
     </form>
 
     {{range .Entries}}
-    <div class="entry">
+    <div class="entry {{if .IsJWT}}jwt-verified{{end}}">
+        {{if .IsJWT}}
+        <div class="jwt-message">Hello Puneet!</div>
+        {{else}}
         <p>{{.Text}}</p>
+        {{end}}
         <div class="timestamp">{{.Timestamp.Format "January 2, 2006 at 3:04 PM"}}</div>
     </div>
     {{end}}

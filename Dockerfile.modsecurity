@@ -1,0 +1,12 @@
+FROM --platform=linux/amd64 owasp/modsecurity-crs:nginx
+
+# Copy our custom configuration
+COPY modsecurity-google.conf /etc/modsecurity.d/owasp-crs/rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf
+
+ENV PORT=8080
+ENV BACKEND="https://pomelo-web-internal.run.internal"
+ENV AUTH_URL=""
+ENV PROXY_SSL=on
+ENV SSL_VERIFY=off
+
+EXPOSE 8080

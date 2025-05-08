@@ -29,8 +29,8 @@
                 <div class="flex h-16 justify-between">
                     <div class="flex">
                         <div class="flex flex-shrink-0 items-center space-x-4">
-                            <a href="http://localhost:8080/" class="text-pomelo-navy hover:text-pomelo-orange px-3 py-2 text-sm font-medium rounded-md hover:bg-pomelo-cream">Insecure Version</a>
-                            <a href="http://localhost:8081/" class="text-pomelo-navy hover:text-pomelo-orange px-3 py-2 text-sm font-medium rounded-md hover:bg-pomelo-cream">Secure Version</a>
+                            <a href="{{.InsecureURL}}" class="text-pomelo-navy hover:text-pomelo-orange px-3 py-2 text-sm font-medium rounded-md hover:bg-pomelo-cream">Insecure Version</a>
+                            <a href="{{.SecureURL}}" class="text-pomelo-navy hover:text-pomelo-orange px-3 py-2 text-sm font-medium rounded-md hover:bg-pomelo-cream">Secure Version</a>
                         </div>
                     </div>
                     {{if eq .Mode "Secure"}}

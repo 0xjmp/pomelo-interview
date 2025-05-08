@@ -11,8 +11,8 @@ This application serves as an educational tool to:
 4. Demonstrate how mod_security can block attacks even when the app contains vulnerable code
 
 The application provides two endpoints to demonstrate ModSecurity's effectiveness:
-   - Insecure endpoint (`http://localhost:8080`): Bypasses ModSecurity, allowing SQL injection attacks
-   - Secure endpoint (`http://localhost:8081`): Protected by ModSecurity, blocks malicious requests
+   - Insecure endpoint ([`https://pomelo-web-insecure.onrender.com`](https://pomelo-web-insecure.onrender.com)): Bypasses ModSecurity, allowing SQL injection attacks
+   - Secure endpoint ([`https://pomelo-web-secure.onrender.com`](https://pomelo-web-secure.onrender.com)): Protected by ModSecurity, blocks malicious requests
 
 ## The Vulnerability
 
@@ -153,6 +153,8 @@ db.Exec("INSERT INTO entries (text) VALUES ($1)", userInput)
 - `Dockerfile` - Basic golang container configuration
 - `docker-compose.yml` - Multi-container Docker configuration
 - `auth` - Google OAuth2 implementation with secure session management and CSRF protection
+- `render.yaml` - [Render](https://render.com) deployment configuration
+- `modsecurity-google.conf` - `/callback` is configured to bypass modsecurity so Google OAuth functions reliably
 
 Uses modsecurity CRS ruleset v4.14.0 (latest).
 
@@ -184,12 +186,11 @@ MIT
 Jake Peterson
 
 ### What I learned making this
-- Modsecurity simply works, which is really cool. I was expecting to have to create my own ruleset. 
-   - Based on my research, it appears nginx is a safer choice over apache2 as the latter has a history of CVEs.
-   - ModSecurity v3 (which is what runs on Nginx) was rewritten from scratch to be more secure and performant than the Apache version (ModSecurity v2).
-   - In a production setting, paranoia would likely be set to a higher value than 1. I kept it at 1 for this demo on purpose to increase my chances of finding interesting bypasses.
-   - I couldn't find any published CVEs specific to CRS 4.1.0. This is the latest version and was released with significant security improvements.
-   - Modsecurity detects SQL keywords so while I can use SQL comments I cannot put anything meaningful beyond the comment that would constitute an attack.
-- I wanted to be fancy and make the go application compile its front-end to wasm. The project structure I initially created (following best practices) felt convoluted so I opted for a simpler setup.
-- Not as much something I've learned, but reminded... building anything in Go is consistently a _good time_. It's really such an impressive language that nails simplicity at near-native runtime performance.
-- This is the best take-home assessment I've been given. Bite-size, relevant to my work, and open-ended enough that I get to think for myself. I will definitely be using an interview question inspired by this one in the future :) 
+- Modsecurity simply works, which is really cool. I was expecting to have to create my own ruleset
+   - Based on my research, it appears nginx is a safer choice over apache2 as the latter has a history of CVEs
+   - ModSecurity v3 (which is what runs on Nginx) was rewritten from scratch to be more secure and performant than the Apache version (ModSecurity v2)
+   - In a production setting, paranoia would likely be set to a higher value than 1. I kept it at 1 for this demo on purpose to increase my chances of finding interesting bypasses
+   - I couldn't find any published CVEs specific to CRS 4.1.0. This is the latest version and was released with significant security improvements
+   - Modsecurity detects SQL keywords so while I can use SQL comments I cannot put anything meaningful beyond the comment that would constitute an attack
+- I wanted to be fancy and make the go application compile its front-end to wasm. The project structure I initially created (following best practices) felt convoluted so I opted for a simpler setup
+- Not as much something I've learned, but reminded... building anything in Go is consistently a _good time_. It's really such an impressive language that nails simplicity at near-native runtime performance

@@ -19,7 +19,6 @@ const (
 	maxAge           = 300 // 5 minutes in seconds
 )
 
-// GoogleUser represents the user info received from Google
 type GoogleUser struct {
 	Email         string `json:"email"`
 	Name          string `json:"name"`
@@ -56,14 +55,14 @@ func NewGoogleAuth(sessionKey []byte) (*GoogleAuth, error) {
 		return nil, fmt.Errorf("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set")
 	}
 
-	// Always use secure URL for OAuth
-	secureURL := os.Getenv("SECURE_URL")
-	if secureURL == "" {
+	// Get base URL from environment
+	baseURL := os.Getenv("SECURE_URL")
+	if baseURL == "" {
 		return nil, fmt.Errorf("SECURE_URL must be set")
 	}
 
-	// Use secure URL for OAuth callback
-	redirectURL := secureURL + "/callback"
+	// Use base URL for OAuth callback
+	redirectURL := baseURL + "/callback"
 
 	config := &oauth2.Config{
 		ClientID:     clientID,
@@ -81,7 +80,7 @@ func NewGoogleAuth(sessionKey []byte) (*GoogleAuth, error) {
 		Path:     "/",
 		MaxAge:   maxAge,
 		HttpOnly: true,
-		Secure:   false, // Set to false for localhost
+		Secure:   true, // Set to true since we're using HTTPS
 		SameSite: http.SameSiteLaxMode,
 	}
 

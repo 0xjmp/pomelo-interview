@@ -17,9 +17,6 @@ vendor/
 # Go workspace file
 go.work
 
-# Environment variables
-.env
-
 # IDE specific files
 .idea
 .vscode
@@ -33,4 +30,21 @@ build/
 # Logs
 *.log 
 
+# My test keys
 jake.*
+
+.terraform/
+*.tfvars
+*.tfstate
+*.tfstate.backup
+*.tfstate.backup.*
+*.tfstate.lock.info
+
+# Custom Google credentials
+*.json
+service-account-key.json
+
+.env*
+!.env.example
+
+certs/

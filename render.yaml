@@ -1,0 +1,119 @@
+services:
+  - type: web
+    name: pomelo-web-insecure
+    env: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    healthCheckTimeout: 5s
+    healthCheckInterval: 10s
+    port: 8080
+    envVars:
+      - key: POMELO_MODE
+        value: "insecure"
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: pomelo-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: pomelo-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: pomelo-db
+          property: database
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: pomelo-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: pomelo-db
+          property: port
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CSRF_KEY
+        generateValue: true
+      - key: INSECURE_URL
+        value: https://pomelo-web.onrender.com
+      - key: SECURE_URL
+        value: https://pomelo-web-secure.onrender.com
+      - key: INSECURE_PORT
+        value: "8080"
+      - key: SECURE_PORT
+        value: "8081"
+
+  - type: web
+    name: pomelo-web-internal
+    env: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    healthCheckTimeout: 5s
+    healthCheckInterval: 10s
+    port: 8080
+    envVars:
+      - key: POMELO_MODE
+        value: "secure"
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: pomelo-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: pomelo-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: pomelo-db
+          property: database
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: pomelo-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: pomelo-db
+          property: port
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CSRF_KEY
+        generateValue: true
+      - key: INSECURE_URL
+        value: https://pomelo-web-insecure.onrender.com
+      - key: SECURE_URL
+        value: https://pomelo-web-secure.onrender.com
+      - key: INSECURE_PORT
+        value: "8080"
+      - key: SECURE_PORT
+        value: "8081"
+
+  - type: web
+    name: pomelo-web-secure
+    env: docker
+    dockerfilePath: ./Dockerfile.modsecurity
+    healthCheckPath: /health
+    healthCheckTimeout: 5s
+    healthCheckInterval: 10s
+    port: 8080
+    envVars:
+      - key: PARANOIA
+        value: "1"
+      - key: SERVER_NAME
+        value: pomelo-web-secure.onrender.com
+      - key: BACKEND
+        value: https://pomelo-web-internal.onrender.com
+
+databases:
+  - name: pomelo-db
+    databaseName: pomelo
+    plan: free
+    postDeploy: |
+      psql $DATABASE_URL -f schema.sql 

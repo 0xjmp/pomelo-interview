@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/asn1"
 	"encoding/gob"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"html/template"
@@ -33,11 +34,13 @@ type Entry struct {
 }
 
 type PageData struct {
-	Entries    []Entry
-	Mode       string
-	BadgeClass string
-	User       *auth.GoogleUser
-	CSRFToken  string
+	Entries     []Entry
+	Mode        string
+	BadgeClass  string
+	User        *auth.GoogleUser
+	CSRFToken   string
+	InsecureURL string
+	SecureURL   string
 }
 
 var (
@@ -239,9 +242,11 @@ func handleInsecure(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := PageData{
-		Entries:    entries,
-		Mode:       "Insecure",
-		BadgeClass: "insecure",
+		Entries:     entries,
+		Mode:        "Insecure",
+		BadgeClass:  "insecure",
+		InsecureURL: os.Getenv("INSECURE_URL"),
+		SecureURL:   os.Getenv("SECURE_URL"),
 	}
 
 	templates.ExecuteTemplate(w, "base.html", data)
@@ -305,11 +310,13 @@ func handleSecure(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := PageData{
-		Entries:    entries,
-		Mode:       "Secure",
-		BadgeClass: "secure",
-		User:       user,
-		CSRFToken:  csrf.Token(r),
+		Entries:     entries,
+		Mode:        "Secure",
+		BadgeClass:  "secure",
+		User:        user,
+		CSRFToken:   csrf.Token(r),
+		InsecureURL: os.Getenv("INSECURE_URL"),
+		SecureURL:   os.Getenv("SECURE_URL"),
 	}
 
 	templates.ExecuteTemplate(w, "base.html", data)
@@ -387,6 +394,19 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
+func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
+	// Check database connection
+	err := db.Ping()
+	if err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{"status": "error", "message": "Database connection failed"})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+}
+
 func main() {
 	initDB()
 	initAuth()
@@ -402,6 +422,7 @@ func main() {
 
 	// Set up routes
 	insecureMux.HandleFunc("/", handleInsecure)
+	insecureMux.HandleFunc("/health", handleHealthCheck)
 
 	csrfMiddleware := csrf.Protect([]byte(requireEnv("CSRF_KEY")))
 
@@ -410,17 +431,24 @@ func main() {
 	secureMux.Handle("/login", csrfMiddleware(http.HandlerFunc(handleLogin)))
 	secureMux.Handle("/callback", csrfMiddleware(http.HandlerFunc(handleCallback)))
 	secureMux.Handle("/logout", csrfMiddleware(http.HandlerFunc(handleLogout)))
+	secureMux.HandleFunc("/health", handleHealthCheck)
 
-	// Get ports from environment
-	insecurePort := requireEnv("INSECURE_PORT")
-	securePort := requireEnv("SECURE_PORT")
+	// Get port from environment
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Default to 8080 for local development
+	}
 
-	// Start servers
-	go func() {
-		log.Printf("Insecure server starting at http://localhost:%s", insecurePort)
-		log.Fatal(http.ListenAndServe(":"+insecurePort, insecureMux))
-	}()
+	// Determine which mux to use based on environment variable
+	var handler http.Handler
+	if os.Getenv("POMELO_MODE") == "secure" {
+		log.Printf("Starting in secure mode on port %s", port)
+		handler = secureMux
+	} else {
+		log.Printf("Starting in insecure mode on port %s", port)
+		handler = insecureMux
+	}
 
-	log.Printf("Secure server starting at http://localhost:%s", securePort)
-	log.Fatal(http.ListenAndServe(":"+securePort, secureMux))
+	log.Printf("Server starting at http://localhost:%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, handler))
 }

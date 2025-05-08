@@ -1,46 +1,52 @@
 services:
+  web:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - POMELO_MODE=insecure
+    tty: true
+    depends_on:
+      - db
+
+  web-internal:
+    build: .
+    ports:
+      - "8080"
+    env_file:
+      - .env
+    environment:
+      - POMELO_MODE=secure
+    tty: true
+    depends_on:
+      - db
+
   modsecurity:
-    image: owasp/modsecurity-crs:nginx
+    build:
+      context: .
+      dockerfile: Dockerfile.modsecurity
     ports:
       - "8081:8080"
     environment:
       - PROXY_SSL=off
       - PARANOIA=1
       - SERVER_NAME=modsecurity
-      - BACKEND=http://web:3001
+      - BACKEND=http://web-internal:8080
       - MODSEC_RULE_ENGINE=on
       - MODSEC_AUDIT_LOG=/dev/stdout
       - MODSEC_AUDIT_LOG_FORMAT=JSON
       - MODSEC_AUDIT_LOG_TYPE=Serial
       - MODSEC_AUDIT_LOG_PARTS=ABIJDEFHZ
-    volumes:
-      - ./modsecurity-google.conf:/etc/modsecurity.d/owasp-crs/rules/RESPONSE-999-EXCLUSION-RULES-AFTER-CRS.conf:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
       interval: 2s
       timeout: 5s
       retries: 3
       start_period: 4s
-
-  web:
-    build: .
-    ports:
-      - "8080:3000"
-    expose:
-      - "3001"
-    environment:
-      - INSECURE_PORT=3000
-      - SECURE_PORT=3001
-    volumes:
-      - .:/app
-    env_file:
-      - .env
-    deploy:
-      restart_policy:
-        condition: on-failure
-    tty: true
     depends_on:
-      - db
+      - web
 
   db:
     image: postgres:16

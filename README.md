@@ -152,6 +152,7 @@ db.Exec("INSERT INTO entries (text) VALUES ($1)", userInput)
 - `schema.sql` - Database schema
 - `Dockerfile` - Basic golang container configuration
 - `docker-compose.yml` - Multi-container Docker configuration
+- `auth` - Google OAuth2 implementation with secure session management and CSRF protection
 
 Uses modsecurity CRS ruleset v4.14.0 (latest).
 

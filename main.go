@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/gob"
 	"fmt"
 	"html/template"
 	"log"
@@ -9,7 +10,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/0xjmp/pomelo-interview/auth"
+	"github.com/gorilla/csrf"
+	"github.com/gorilla/sessions"
 	_ "github.com/lib/pq"
+	"golang.org/x/oauth2"
 )
 
 type Entry struct {
@@ -22,10 +27,17 @@ type PageData struct {
 	Entries    []Entry
 	Mode       string
 	BadgeClass string
+	User       *auth.GoogleUser
+	CSRFToken  string
 }
 
-var db *sql.DB
-var templates *template.Template
+var (
+	db         *sql.DB
+	templates  *template.Template
+	store      *sessions.CookieStore
+	oauth      *oauth2.Config
+	googleAuth *auth.GoogleAuth
+)
 
 func requireEnv(key string) string {
 	value := os.Getenv(key)
@@ -74,6 +86,34 @@ func initDB() {
 	}
 }
 
+func initAuth() {
+	// Register types for session storage
+	gob.Register(&auth.GoogleUser{})
+
+	// Initialize sessions
+	store = sessions.NewCookieStore([]byte(requireEnv("SESSION_SECRET")))
+
+	// Initialize Google OAuth
+	var err error
+	googleAuth, err = auth.NewGoogleAuth([]byte(requireEnv("SESSION_SECRET")))
+	if err != nil {
+		log.Fatal("Failed to initialize Google Auth:", err)
+	}
+
+	// Initialize OAuth config for backward compatibility
+	oauth = googleAuth.GetConfig()
+}
+
+func getUser(r *http.Request) *auth.GoogleUser {
+	session, _ := store.Get(r, "session")
+	val := session.Values["user"]
+	user, ok := val.(*auth.GoogleUser)
+	if !ok {
+		return nil
+	}
+	return user
+}
+
 func handleInsecure(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		text := r.FormValue("text")
@@ -119,7 +159,11 @@ func handleInsecure(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleSecure(w http.ResponseWriter, r *http.Request) {
+	// Get user info if logged in, but don't require it
+	user := getUser(r)
+
 	if r.Method == http.MethodPost {
+		// CSRF token is automatically verified by the middleware
 		text := r.FormValue("text")
 		if text != "" {
 			// Use parameterized query for security
@@ -156,13 +200,83 @@ func handleSecure(w http.ResponseWriter, r *http.Request) {
 		Entries:    entries,
 		Mode:       "Secure",
 		BadgeClass: "secure",
+		User:       user,
+		CSRFToken:  csrf.Token(r),
 	}
 
 	templates.ExecuteTemplate(w, "base.html", data)
 }
 
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	googleAuth.LoginHandler(w, r)
+}
+
+func handleCallback(w http.ResponseWriter, r *http.Request) {
+	user, err := googleAuth.CallbackHandler(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Save user to session
+	session, _ := store.Get(r, "session")
+	session.Values["user"] = user
+	if err := session.Save(r, w); err != nil {
+		log.Printf("Failed to save session: %v", err)
+		http.Error(w, "Failed to save session", http.StatusInternalServerError)
+		return
+	}
+
+	// Redirect to home page
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	session, err := store.Get(r, "session")
+	if err != nil {
+		log.Printf("Failed to get session: %v", err)
+		http.Error(w, "Failed to get session", http.StatusInternalServerError)
+		return
+	}
+
+	// Get user before clearing session
+	if user, ok := session.Values["user"].(*auth.GoogleUser); ok && user != nil {
+		// Attempt to revoke Google OAuth token
+		client := oauth.Client(r.Context(), nil)
+		resp, err := client.Get("https://accounts.google.com/o/oauth2/revoke")
+		if err != nil {
+			log.Printf("Failed to revoke OAuth token: %v", err)
+			// Continue with logout even if token revocation fails
+		} else {
+			resp.Body.Close()
+		}
+	}
+
+	// Destroy the session
+	session.Options.MaxAge = -1
+	session.Values = make(map[interface{}]interface{})
+
+	if err := session.Save(r, w); err != nil {
+		log.Printf("Failed to save session: %v", err)
+		http.Error(w, "Failed to save session", http.StatusInternalServerError)
+		return
+	}
+
+	// Delete the session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+	})
+
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
 func main() {
 	initDB()
+	initAuth()
 	defer db.Close()
 
 	// Parse template
@@ -174,7 +288,14 @@ func main() {
 
 	// Set up routes
 	insecureMux.HandleFunc("/", handleInsecure)
-	secureMux.HandleFunc("/", handleSecure)
+
+	csrfMiddleware := csrf.Protect([]byte(requireEnv("CSRF_KEY")))
+
+	// Wrap secure routes with CSRF protection
+	secureMux.Handle("/", csrfMiddleware(http.HandlerFunc(handleSecure)))
+	secureMux.Handle("/login", csrfMiddleware(http.HandlerFunc(handleLogin)))
+	secureMux.Handle("/callback", csrfMiddleware(http.HandlerFunc(handleCallback)))
+	secureMux.Handle("/logout", csrfMiddleware(http.HandlerFunc(handleLogout)))
 
 	// Get ports from environment
 	insecurePort := requireEnv("INSECURE_PORT")

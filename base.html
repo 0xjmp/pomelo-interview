@@ -40,11 +40,17 @@
         }
         .nav {
             margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav-links {
+            display: flex;
+            gap: 15px;
         }
         .nav a {
             color: #4CAF50;
             text-decoration: none;
-            margin-right: 15px;
         }
         .nav a:hover {
             text-decoration: underline;
@@ -63,15 +69,61 @@
         .mode-badge.insecure {
             background-color: #ff4444;
         }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-info img {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+        .auth-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .auth-buttons a {
+            padding: 8px 15px;
+            border-radius: 4px;
+            text-decoration: none;
+            color: white;
+        }
+        .login-btn {
+            background-color: #4285f4;
+        }
+        .logout-btn {
+            background-color: #757575;
+        }
     </style>
 </head>
 <body>
     <div class="nav">
-        <a href="http://localhost:8080/">Insecure Version</a>
-        <a href="http://localhost:8081/">Secure Version</a>
+        <div class="nav-links">
+            <a href="http://localhost:8080/">Insecure Version</a>
+            <a href="http://localhost:8081/">Secure Version</a>
+        </div>
+        {{if eq .Mode "Secure"}}
+            <div class="auth-buttons">
+                {{if .User}}
+                    <div class="user-info">
+                        {{if .User.Picture}}
+                            <img src="{{.User.Picture}}" alt="Profile picture">
+                        {{end}}
+                        <span>{{.User.Name}}</span>
+                        <a href="/logout" class="logout-btn">Logout</a>
+                    </div>
+                {{else}}
+                    <a href="/login" class="login-btn">Sign in with Google</a>
+                {{end}}
+            </div>
+        {{end}}
     </div>
     <h1>Pomelo Notes <span class="mode-badge {{.BadgeClass}}">{{.Mode}} Mode</span></h1>
     <form method="POST">
+        {{if eq .Mode "Secure"}}
+            <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
+        {{end}}
         <input type="text" name="text" placeholder="Enter your note" required>
         <button type="submit">Add Note</button>
     </form>

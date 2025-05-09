@@ -1,0 +1,13 @@
+project_id           = "your-gcp-project-id"
+region              = "us-west1"  # Oregon region
+env_file            = "../.env.production"
+
+# These values are only used if not found in .env file
+google_client_id     = "your-google-client-id"
+google_client_secret = "your-google-client-secret"
+
+# Optional overrides (if not specified in .env)
+db_name             = "pomelo"
+db_user             = "pomelo" 
+
+github_owner = "your-github-username"

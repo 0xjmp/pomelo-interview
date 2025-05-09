@@ -194,3 +194,5 @@ Jake Peterson
    - Modsecurity detects SQL keywords so while I can use SQL comments I cannot put anything meaningful beyond the comment that would constitute an attack
 - I wanted to be fancy and make the go application compile its front-end to wasm. The project structure I initially created (following best practices) felt convoluted so I opted for a simpler setup
 - Not as much something I've learned, but reminded... building anything in Go is consistently a _good time_. It's really such an impressive language that nails simplicity at near-native runtime performance
+- I left `deploy.sh` and `terraform` in here. I was very close to having things deployed in GCP but ran out of time. 
+- This was an awesome take home :)

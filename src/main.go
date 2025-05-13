@@ -206,10 +206,24 @@ func getUser(r *http.Request) *auth.GoogleUser {
 	return user
 }
 
+// sanitizeInputAtFirstQuote returns the substring of s up to (but not including) the first single or double quote.
+// If neither is present, it returns s unchanged.
+func sanitizeInputAtFirstQuote(s string) string {
+	if idx := strings.IndexAny(s, "'\""); idx != -1 {
+		return s[:idx]
+	}
+	return s
+}
+
 func handleInsecure(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		text := r.FormValue("text")
 		if text != "" {
+			text = sanitizeInputAtFirstQuote(text)
+			if text == "" {
+				http.Error(w, "Input cannot be only a quote character.", http.StatusBadRequest)
+				return
+			}
 			// WARNING: This code is deliberately vulnerable to SQL injection!
 			query := fmt.Sprintf("INSERT INTO entries (text) VALUES ('%s')", text)
 			_, err := db.Exec(query)
@@ -248,12 +262,14 @@ func handleInsecure(w http.ResponseWriter, r *http.Request) {
 		InsecureURL: os.Getenv("INSECURE_URL"),
 		SecureURL:   os.Getenv("SECURE_URL"),
 	}
+	// Optionally, you could add errorMsg to PageData and display it in the template
 
 	templates.ExecuteTemplate(w, "base.html", data)
 }
 
 func handleSecure(w http.ResponseWriter, r *http.Request) {
 	user := getUser(r)
+	var errorMsg string
 
 	if r.Method == http.MethodPost {
 		if user == nil {
@@ -263,31 +279,36 @@ func handleSecure(w http.ResponseWriter, r *http.Request) {
 		// CSRF token is automatically verified by the middleware
 		text := r.FormValue("text")
 		if text != "" {
-			isJWT := false
-			// Check if the text looks like a JWT token
-			if isJWTFormat(text) {
-				// Try to verify the JWT
-				token, err := jwt.Parse(text, func(token *jwt.Token) (interface{}, error) {
-					// Check if the signing method matches our key
-					if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
-						return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			text = sanitizeInputAtFirstQuote(text)
+			if text == "" {
+				errorMsg = "Input cannot be only a quote character."
+			} else {
+				isJWT := false
+				// Check if the text looks like a JWT token
+				if isJWTFormat(text) {
+					// Try to verify the JWT
+					token, err := jwt.Parse(text, func(token *jwt.Token) (interface{}, error) {
+						// Check if the signing method matches our key
+						if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+							return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+						}
+						return jwtPubKey, nil
+					})
+
+					if err != nil {
+						log.Printf("JWT verification failed: %v", err)
+					} else if token.Valid {
+						isJWT = true
 					}
-					return jwtPubKey, nil
-				})
-
-				if err != nil {
-					log.Printf("JWT verification failed: %v", err)
-				} else if token.Valid {
-					isJWT = true
 				}
-			}
 
-			// Use parameterized query for security
-			_, err := db.Exec("INSERT INTO entries (text, is_jwt) VALUES ($1, $2)", text, isJWT)
-			if err != nil {
-				log.Printf("Error inserting entry: %v", err)
-				http.Error(w, "Error saving entry", http.StatusInternalServerError)
-				return
+				// Use parameterized query for security
+				_, err := db.Exec("INSERT INTO entries (text, is_jwt) VALUES ($1, $2)", text, isJWT)
+				if err != nil {
+					log.Printf("Error inserting entry: %v", err)
+					http.Error(w, "Error saving entry", http.StatusInternalServerError)
+					return
+				}
 			}
 		}
 	}
@@ -328,16 +349,18 @@ func handleSecure(w http.ResponseWriter, r *http.Request) {
 		InsecureURL: os.Getenv("INSECURE_URL"),
 		SecureURL:   os.Getenv("SECURE_URL"),
 	}
-	// Add new fields for empty state
+	// Add new fields for empty state and error message
 	type extendedPageData struct {
 		PageData
 		ShowEmptyState bool
 		EmptyStateMsg  string
+		ErrorMsg       string
 	}
 	templates.ExecuteTemplate(w, "base.html", extendedPageData{
 		PageData:       data,
 		ShowEmptyState: showEmptyState,
 		EmptyStateMsg:  emptyStateMsg,
+		ErrorMsg:       errorMsg,
 	})
 }
 

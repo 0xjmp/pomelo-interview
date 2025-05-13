@@ -79,6 +79,11 @@
                         {{.EmptyStateMsg}}
                     </div>
                 {{end}}
+                {{if .ErrorMsg}}
+                    <div class="rounded-md bg-red-50 border border-red-200 p-4 text-red-800 mb-4 text-center">
+                        {{.ErrorMsg}}
+                    </div>
+                {{end}}
                 <div class="flex gap-x-4">
                     <input 
                         type="text" 

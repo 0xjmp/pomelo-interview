@@ -255,14 +255,23 @@ func handleInsecure(w http.ResponseWriter, r *http.Request) {
 		entries = append(entries, entry)
 	}
 
-	data := PageData{
-		Entries:     entries,
-		Mode:        "Insecure",
-		BadgeClass:  "insecure",
-		InsecureURL: os.Getenv("INSECURE_URL"),
-		SecureURL:   os.Getenv("SECURE_URL"),
+	data := struct {
+		PageData
+		ShowEmptyState bool
+		EmptyStateMsg  string
+		ErrorMsg       string
+	}{
+		PageData: PageData{
+			Entries:     entries,
+			Mode:        "Insecure",
+			BadgeClass:  "insecure",
+			InsecureURL: os.Getenv("INSECURE_URL"),
+			SecureURL:   os.Getenv("SECURE_URL"),
+		},
+		ShowEmptyState: false,
+		EmptyStateMsg:  "",
+		ErrorMsg:       "",
 	}
-	// Optionally, you could add errorMsg to PageData and display it in the template
 
 	templates.ExecuteTemplate(w, "base.html", data)
 }

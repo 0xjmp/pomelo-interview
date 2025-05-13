@@ -253,10 +253,13 @@ func handleInsecure(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleSecure(w http.ResponseWriter, r *http.Request) {
-	// Get user info if logged in, but don't require it
 	user := getUser(r)
 
 	if r.Method == http.MethodPost {
+		if user == nil {
+			http.Error(w, "You must be logged in to post notes", http.StatusUnauthorized)
+			return
+		}
 		// CSRF token is automatically verified by the middleware
 		text := r.FormValue("text")
 		if text != "" {
@@ -309,6 +312,13 @@ func handleSecure(w http.ResponseWriter, r *http.Request) {
 		entries = append(entries, entry)
 	}
 
+	showEmptyState := false
+	emptyStateMsg := ""
+	if user == nil {
+		showEmptyState = true
+		emptyStateMsg = "You must be signed in with Google to post notes. Please log in above."
+	}
+
 	data := PageData{
 		Entries:     entries,
 		Mode:        "Secure",
@@ -318,8 +328,17 @@ func handleSecure(w http.ResponseWriter, r *http.Request) {
 		InsecureURL: os.Getenv("INSECURE_URL"),
 		SecureURL:   os.Getenv("SECURE_URL"),
 	}
-
-	templates.ExecuteTemplate(w, "base.html", data)
+	// Add new fields for empty state
+	type extendedPageData struct {
+		PageData
+		ShowEmptyState bool
+		EmptyStateMsg  string
+	}
+	templates.ExecuteTemplate(w, "base.html", extendedPageData{
+		PageData:       data,
+		ShowEmptyState: showEmptyState,
+		EmptyStateMsg:  emptyStateMsg,
+	})
 }
 
 // isJWTFormat checks if the text looks like a JWT token

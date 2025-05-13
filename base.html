@@ -74,6 +74,11 @@
                 {{if eq .Mode "Secure"}}
                     <input type="hidden" name="gorilla.csrf.Token" value="{{.CSRFToken}}">
                 {{end}}
+                {{if .ShowEmptyState}}
+                    <div class="rounded-md bg-yellow-50 border border-yellow-200 p-4 text-yellow-800 mb-4 text-center">
+                        {{.EmptyStateMsg}}
+                    </div>
+                {{end}}
                 <div class="flex gap-x-4">
                     <input 
                         type="text" 
@@ -81,10 +86,12 @@
                         placeholder="{{if eq .Mode "Secure"}}Enter your note or paste a JWT token{{else}}Enter your note{{end}}"
                         required
                         class="block w-full rounded-md border-0 py-1.5 text-pomelo-navy shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-pomelo-orange sm:text-sm sm:leading-6 px-3"
+                        {{if .ShowEmptyState}}disabled{{end}}
                     >
                     <button 
                         type="submit"
                         class="rounded-md bg-pomelo-orange px-8 py-2 text-sm font-semibold text-white shadow-sm hover:bg-pomelo-orange-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pomelo-orange min-w-[140px] whitespace-nowrap"
+                        {{if .ShowEmptyState}}disabled aria-disabled="true" class="opacity-50 cursor-not-allowed"{{end}}
                     >
                         Add Note
                     </button>
